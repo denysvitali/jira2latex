@@ -1,5 +1,6 @@
 Just a change to test pygithub api.
 dummy commit
+dummy commit 2
 
 ## Usage
 
