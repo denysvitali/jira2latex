@@ -3,6 +3,7 @@ import yaml
 import getpass
 import datetime
 from humanfriendly import format_timespan
+import re
 
 
 def _remove_string_format(word):
@@ -34,6 +35,7 @@ def _add_issues(lines, issue, category):
     '''
 
     lines += ["", "", "% ------------------ " + category + "---------------------"]
+    lines += ["\\subsection{" + category + "}"]
     
     def getKey(item):
         return int(item[0].id)
@@ -82,25 +84,25 @@ class IssuesToLatex:
                 key, resolution_name, summary, description, time_spent, priority, issueType = self._parse_issue(issue)
                 if resolution_name is None:
                     report_item = "\\jiraIssue{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}".format(
-                        key,
+                        self.safe_latex(key),
                         "Open",
-                        summary,
-                        description,
-                        time_spent,
-                        priority.name,
-                        issueType
+                        self.safe_latex(summary),
+                        self.safe_latex(description),
+                        self.safe_latex(time_spent),
+                        self.safe_latex(str.lower(priority.name)),
+                        self.safe_latex(str.lower(issueType))
                     )
                     open_issues.append([priority, report_item])
                     continue
                 else:
                     report_item = "\\jiraIssue{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}".format(
-                        key,
-                        resolution_name,
-                        summary,
-                        description,
-                        time_spent,
-                        priority.name,
-                        issueType
+                        self.safe_latex(key),
+                        self.safe_latex(resolution_name),
+                        self.safe_latex(summary),
+                        self.safe_latex(description),
+                        self.safe_latex(time_spent),
+                        self.safe_latex(str.lower(priority.name)),
+                        self.safe_latex(str.lower(issueType))
                     )
 
                 if issue.fields.resolution.name not in self._accepted_resolutions:
@@ -117,13 +119,26 @@ class IssuesToLatex:
 
     def _parse_issue(self, issue):
         summary = issue.fields.summary
-        description = str.replace(issue.fields.description, "\n", "\\\\") if issue.fields.description is not None else None
+        description = issue.fields.description if issue.fields.description is not None else None
         resolution_name = issue.fields.resolution.name if issue.fields.resolution is not None else None
         time_spent = format_timespan(issue.fields.timespent) if issue.fields.timespent is not None else None
         priority = issue.fields.priority
         issueType = issue.fields.issuetype.name
 
         return issue.key, resolution_name, summary, description, time_spent, priority, issueType
+    
+    def safe_latex(self, text):
+        if text is None:
+            return ""
+        text = str.replace(text, "\\", "\\\\")
+        text = str.replace(text, "{", "\\{")
+        text = str.replace(text, "}", "\\}")
+        text = str.replace(text, "_", "\\textunderscore ")
+        text = re.sub(r'(\s*\n\s*)+', '\n', text)
+        text = re.sub(r'!(\S+?)!', '', text)
+        text = re.sub(r'\n$', '', text)
+        text = str.replace(text, "\n", "\\\\")
+        return text
 
     def _search_issues(self):
         team = ", ".join(self._team)
