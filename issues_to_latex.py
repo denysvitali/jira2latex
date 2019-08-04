@@ -1,6 +1,47 @@
 from jira.client import JIRA
 import yaml
 import getpass
+import datetime
+from humanfriendly import format_timespan
+
+
+def _remove_string_format(word):
+    has_changed = False
+    while word:
+        if word[0] in ("{", "*", "_", "}"):
+            word = word[1:]
+            has_changed = True
+        else:
+            if word[-1] in ("{", "*", "_", "}"):
+                word = word[:-1]
+                has_changed = True
+            else:
+                break
+
+    return word if not has_changed else "\\textit{{{}}}".format(word)
+
+
+def _add_issues(lines, issue, category):
+    '''
+    :param lines:
+        current list to add items
+
+    :param issues:
+        List[priority, issue]
+
+    :param str category:
+        Category name
+    '''
+
+    lines += ["", "", "% ------------------ " + category + "---------------------"]
+    
+    def getKey(item):
+        return int(item[0].id)
+    issue.sort(key=getKey)
+    
+    for issue in issue:
+        lines.append(issue[1])
+
 
 class IssuesToLatex:
     def __init__(self):
@@ -9,6 +50,7 @@ class IssuesToLatex:
 
         self._username = data['login']['username']
         self._password = data['login'].get('password')
+        self._server = data['login']['server']
         if not self._password:
             self._password = getpass.getpass()
 
@@ -22,145 +64,75 @@ class IssuesToLatex:
         self._accepted_resolutions = data['tasks_info']['resolutions']
 
         self._jira = None
-        self._custom_fields = {
-            'customer_summary': 'customfield_10300',
-            'customer_report': 'customfield_10600',
-            'epic_key': 'customfield_10006',
-            'epic_name': 'customfield_10007',
-        }
+        self._custom_fields = {}
         self._issues_to_latex()
 
     def _issues_to_latex(self):
-        options = {'server': 'https://eden.esss.com.br/jira/'}
+        options = {'server': 'https://' + self._server}
         basic_auth = (self._username, self._password)
         self._jira = JIRA(basic_auth=basic_auth, options=options, )
         issues = self._search_issues()
 
         with open('issues_to_latex.txt', 'w', encoding='utf-8') as f:
-
-            application_issues = []
-            calc_issues = []
-            unknown = []
-            needs_review = []
+            solved_issues = []
+            unsolved_issues = []
+            open_issues = []
 
             for issue in issues:
-                if issue.fields.resolution.name not in self._accepted_resolutions:
+                key, resolution_name, summary, description, time_spent, priority, issueType = self._parse_issue(issue)
+                if resolution_name is None:
+                    report_item = "\\jiraIssue{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}".format(
+                        key,
+                        "Open",
+                        summary,
+                        description,
+                        time_spent,
+                        priority.name,
+                        issueType
+                    )
+                    open_issues.append([priority, report_item])
                     continue
-
-                key, customer_summary, customer_report, epic_name = self._parse_issue(issue)
-
-                issue_needs_review = customer_summary is None or customer_report is None or \
-                                     len(issue.fields.components) == 0 or len(customer_summary) < 3
-
-                if customer_report:
-                    words = customer_report.split()
-                    for index, word in enumerate(words):
-                        if index == 0 and word[0].isupper():    # lower first char of customer report
-                            word = word[:1].lower() + word[1:]
-
-                        words[index] = self._remove_string_format(word)
-
-                    customer_report = " ".join(words)
-                    if customer_report[-1] == ".":     # remove period
-                        customer_report = customer_report[:-1]
-
-                report_item = "\\item \\textbf{{{}}}: {}".format(issue.key, customer_summary)
-                report_item += ": {};".format(customer_report) if customer_report else ";"
-                element = (epic_name, report_item)
-
-                if issue_needs_review:
-                    needs_review.append(element)
-                elif issue.fields.components[0].name == "Application":
-                    application_issues.append(element)
-                elif issue.fields.components[0].name == "Numerical":
-                    calc_issues.append(element)
                 else:
-                    unknown.append(element)  # crazy RF-DAP components
+                    report_item = "\\jiraIssue{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}".format(
+                        key,
+                        resolution_name,
+                        summary,
+                        description,
+                        time_spent,
+                        priority.name,
+                        issueType
+                    )
 
-            self._sort_by_epic_name(application_issues)
-            self._sort_by_epic_name(calc_issues)
-            self._sort_by_epic_name(needs_review)
-            self._sort_by_epic_name(unknown)
+                if issue.fields.resolution.name not in self._accepted_resolutions:
+                    unsolved_issues.append([priority, report_item])
+                else:
+                    solved_issues.append([priority, report_item])
 
             lines = []
-            if application_issues:
-                self._add_issues(lines, application_issues, "Application")
-            if calc_issues:
-                self._add_issues(lines, calc_issues, "Numeric")
-            if needs_review:
-                self._add_issues(lines, needs_review, "Needs review")
-            if unknown:
-                self._add_issues(lines, unknown, "UNKNOWN")
+            _add_issues(lines, solved_issues, "Solved Issues")
+            _add_issues(lines, unsolved_issues, "Unsolved Issues")
+            _add_issues(lines, open_issues, "Open Issues")
 
             f.write('\n'.join(lines))
 
     def _parse_issue(self, issue):
-        customer_summary = getattr(issue.fields, self._custom_fields['customer_summary'], None)
-        customer_report = getattr(issue.fields, self._custom_fields['customer_report'], None)
+        summary = issue.fields.summary
+        description = str.replace(issue.fields.description, "\n", "\\\\") if issue.fields.description is not None else None
+        resolution_name = issue.fields.resolution.name if issue.fields.resolution is not None else None
+        time_spent = format_timespan(issue.fields.timespent) if issue.fields.timespent is not None else None
+        priority = issue.fields.priority
+        issueType = issue.fields.issuetype.name
 
-        if customer_report and \
-            "could you briefly describe what has been done to resolve this issue?" in str.lower(customer_report):
-            customer_report = ''
-
-        epic_key = getattr(issue.fields, self._custom_fields['epic_key'], None)
-        epic_name = "No Epic"
-        if epic_key:
-            epic_name = getattr(self._jira.issue(epic_key).fields, self._custom_fields['epic_name'], "No Epic")
-
-        return issue.key, customer_summary, customer_report, epic_name
-
+        return issue.key, resolution_name, summary, description, time_spent, priority, issueType
 
     def _search_issues(self):
         team = ", ".join(self._team)
-        jql_str = f"project = {self._project} AND status in (Resolved, Closed) AND assignee in ({team}) AND " \
-            f"issuetype in (Bug, Improvement, Story, Task, Support, Sub-task) AND " \
-            f"resolutiondate >= {self._start_date} AND resolutiondate <= {self._end_date} ORDER BY component ASC, resolved ASC"
+        jql_str = f"project = {self._project} AND status in (Resolved, Closed, Open) AND assignee in ({team}) AND " \
+                  f"issuetype in (Bug, Story, Task, Sub-task)  " \
+                  f"ORDER BY component ASC, resolved ASC"
 
         return self._jira.search_issues(jql_str, maxResults=False)
-
-    def _remove_string_format(self, word):
-        has_changed = False
-        while word:
-            if word[0] in ("{", "*", "_", "}"):
-                word = word[1:]
-                has_changed = True
-            else:
-                if word[-1] in ("{", "*", "_", "}"):
-                    word = word[:-1]
-                    has_changed = True
-                else:
-                    break
-
-        return word if not has_changed else "\\textit{{{}}}".format(word)
-
-    def _sort_by_epic_name(self, elements):
-        '''
-        :param List[Tuple[epic_name, report_item] elements:
-        '''
-        elements.sort(key=lambda tup: tup[0] if tup[0] is not None else "No Epic")
-
-    def _add_issues(self, lines, epic_report_list, component):
-        '''
-        :param lines:
-            current list to add items
-
-        :param List[Tuple[epic_name, report_item] epic_report_list:
-
-        :param str component:
-            "Application", "Numeric" or crazy RF-DAP components
-        '''
-        lines += ["", "", "% ------------------ " + component + "---------------------"]
-        current_epic = ''
-        for epic, report_item in epic_report_list:
-            if epic != current_epic:
-                lines += ["", epic, ""]
-                current_epic = epic
-
-            lines.append(report_item if report_item is not None else "None")
 
 
 if __name__ == '__main__':
     IssuesToLatex()
-
-
-
