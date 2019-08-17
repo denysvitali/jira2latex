@@ -36,11 +36,12 @@ def _add_issues(lines, issue, category):
 
     lines += ["", "", "% ------------------ " + category + "---------------------"]
     lines += ["\\subsection{" + category + "}"]
-    
+
     def getKey(item):
         return int(item[0].id)
+
     issue.sort(key=getKey)
-    
+
     for issue in issue:
         lines.append(issue[1])
 
@@ -80,35 +81,25 @@ class IssuesToLatex:
             unsolved_issues = []
             open_issues = []
 
+            issue_dict = {}
+            subtask_dict = {}
+
             for issue in issues:
-                key, resolution_name, summary, description, time_spent, priority, issueType = self._parse_issue(issue)
-                if resolution_name is None:
-                    report_item = "\\jiraIssue{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}".format(
-                        self.safe_latex(key),
-                        "Open",
-                        self.safe_latex(summary),
-                        self.safe_latex(description),
-                        self.safe_latex(time_spent),
-                        self.safe_latex(str.lower(priority.name)),
-                        self.safe_latex(str.lower(issueType))
-                    )
-                    open_issues.append([priority, report_item])
+                parsed_issue = self._parse_issue(issue)
+                issue_dict[parsed_issue['key']] = parsed_issue
+                for subTask in parsed_issue['subTasks']:
+                    parsedsubtasks = self._parse_issue(self._jira.issue(subTask.key))
+                    subtask_dict[parsedsubtasks['key']] = parsedsubtasks
+                report_item = self._getReportItem(parsed_issue, subtask_dict)
+
+                if parsed_issue['resolution_name'] is None:
+                    open_issues.append([parsed_issue['priority'], report_item])
                     continue
-                else:
-                    report_item = "\\jiraIssue{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}".format(
-                        self.safe_latex(key),
-                        self.safe_latex(resolution_name),
-                        self.safe_latex(summary),
-                        self.safe_latex(description),
-                        self.safe_latex(time_spent),
-                        self.safe_latex(str.lower(priority.name)),
-                        self.safe_latex(str.lower(issueType))
-                    )
 
                 if issue.fields.resolution.name not in self._accepted_resolutions:
-                    unsolved_issues.append([priority, report_item])
+                    unsolved_issues.append([parsed_issue['priority'], report_item])
                 else:
-                    solved_issues.append([priority, report_item])
+                    solved_issues.append([parsed_issue['priority'], report_item])
 
             lines = []
             _add_issues(lines, solved_issues, "Solved Issues")
@@ -119,14 +110,30 @@ class IssuesToLatex:
 
     def _parse_issue(self, issue):
         summary = issue.fields.summary
-        description = issue.fields.description if issue.fields.description is not None else None
+        description = issue.fields.description
         resolution_name = issue.fields.resolution.name if issue.fields.resolution is not None else None
         time_spent = format_timespan(issue.fields.timespent) if issue.fields.timespent is not None else None
         priority = issue.fields.priority
         issueType = issue.fields.issuetype.name
+        status = issue.fields.status.name
+        statusColor = issue.fields.status.statusCategory.colorName
+        labels = issue.fields.labels
+        subtasks = issue.fields.subtasks
 
-        return issue.key, resolution_name, summary, description, time_spent, priority, issueType
-    
+        return dict({
+            'key': issue.key,
+            'resolution_name': resolution_name,
+            'summary': summary,
+            'description': description,
+            'time_spent': time_spent,
+            'priority': priority,
+            'issueType': issueType,
+            'status': status,
+            'statusColor': statusColor,
+            'labels': labels,
+            'subTasks': subtasks
+        })
+
     def safe_latex(self, text):
         if text is None:
             return ""
@@ -142,11 +149,34 @@ class IssuesToLatex:
 
     def _search_issues(self):
         team = ", ".join(self._team)
-        jql_str = f"project = {self._project} AND status in (Resolved, Closed, Open) AND assignee in ({team}) AND " \
-                  f"issuetype in (Bug, Story, Task, Sub-task)  " \
-                  f"ORDER BY component ASC, resolved ASC"
+        jql_str = f"project = {self._project} AND " \
+                  f"issuetype not in subtaskIssueTypes() " \
+                  f"ORDER BY priority ASC, resolved ASC"
 
         return self._jira.search_issues(jql_str, maxResults=False)
+
+    def _getReportItem(self, issue, subtask_dict):
+        subtask_string = ""
+        for st in issue['subTasks']:
+            subtask_string += "\t" + self._getReportItem(subtask_dict[st.key], subtask_dict) + "\n"
+            
+        if len(subtask_string) != 0:
+            subtask_string = "subtasks={" + subtask_string + "}, "
+
+        return "\\jiraIssue[iKey={}, resolution={}, title={{{}}}, timeSpent={}, priority={}, type={}, status={}, statusColor={}, labels={{{}}}," \
+               "{}description={{{}}}]".format(
+            self.safe_latex(issue['key']),
+            self.safe_latex(issue['resolution_name']),
+            self.safe_latex(issue['summary']),
+            self.safe_latex(issue['time_spent']),
+            self.safe_latex(str.lower(issue['priority'].name)),
+            self.safe_latex(str.lower(issue['issueType'])),
+            self.safe_latex(str.upper(issue['status'])),
+            issue['statusColor'],
+            self.safe_latex(",".join(issue['labels'])),
+            subtask_string,
+            self.safe_latex(issue['description'])
+        )
 
 
 if __name__ == '__main__':
