@@ -11,6 +11,24 @@ After running `python issues_to_latex.py`, a `issues_to_latex.txt` is generated.
 The `issues_to_latex.py` script expects a `issues_to_latex_config.yaml` on the same folder, 
 so in case need to move the script, don't forget to move the config file as well. 
 
+Example of `issue_to_latex_config.yml`:
+
+```yaml
+login:
+  username: denvit
+  password: mysecretpassword
+  server: jira.ded1.denv.it
+
+project_info:
+  project: DUP
+  team: ['denvit']
+
+tasks_info:
+  startdate: 2019-06-01
+  enddate: 2019-09-01
+  resolutions: ['Fixed', 'Done']
+```
+
 
 ## Output example:
 
