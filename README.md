@@ -15,32 +15,8 @@ so in case need to move the script, don't forget to move the config file as well
 ## Output example:
 
 ```latex
-% ------------------Component Name---------------------
-
-Epic name
-
-\item \textbf{Issue-key}: customer summary: customer report;
-\item \textbf{Issue-key}: customer summary;
-
-Another epic
-
-\item \textbf{Issue-key}: customer summary;
-
-% ------------------Another component---------------------
-Epic name
-
-\item \textbf{Issue-key}: customer summary: customer report with text \textit{format};
-\item \textbf{Issue-key}: customer summary;
-
-Another epic
-
-\item \textbf{Issue-key}: customer summary;
-
-% ------------------ Needs review---------------------
-
-No Epic
-
-\item \textbf{Issue-key}: None;
-\item \textbf{Issue-key}: None;
+% ------------------ Solved Issues---------------------
+\subsection{Solved Issues}
+\jiraIssue[iKey=DUP-53, resolution=Done, title={Switch from Hibernate to JOOQ}, timeSpent=10 hours, priority=highest, type=task, status=RESOLVED, statusColor=green, labels={},description={}]
 
 ```
