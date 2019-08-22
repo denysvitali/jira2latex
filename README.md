@@ -20,3 +20,5 @@ so in case need to move the script, don't forget to move the config file as well
 \jiraIssue[iKey=DUP-53, resolution=Done, title={Switch from Hibernate to JOOQ}, timeSpent=10 hours, priority=highest, type=task, status=RESOLVED, statusColor=green, labels={},description={}]
 
 ```
+
+![Solved Issued](screenshot.png)
