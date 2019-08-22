@@ -1,0 +1,103 @@
+\usepackage{parcolumns}
+\usepackage{ifthen}
+\usepackage{tikz}
+\usepackage{import}
+
+%%% SVG
+\newlength{\myhspace}
+\newcommand{\importSVG}[2]{\raisebox{-0.2\height}{
+    \def\svgwidth{#2}
+    \import{./figures/}{#1.pdf_tex}
+}}
+
+\newcommand{\jiraIssueType}[2]{\raisebox{-0.2\height}{
+    \def\svgwidth{#2}
+    \setlength{\myhspace}{#2}
+    \hspace{-1.2\myhspace}
+    \import{./images/jira/issue-types/}{#1.pdf_tex}
+}}
+
+\newcommand{\jiraPriority}[2]{\raisebox{0\height}{
+    \def\svgwidth{#2}
+    \import{./images/jira/priorities/}{#1.pdf_tex}
+}}
+%%% /SVG
+
+
+%%% Jira Issue
+% Parameters: 
+% key,
+% resolution_name,
+% summary,
+% description,
+% time_spent,
+% priority.name,
+% issueType
+
+\definecolor{jira-green}{HTML}{00875A}
+\definecolor{jira-blue-gray}{HTML}{0052CC}
+\definecolor{jira-yellow}{HTML}{FDD835}
+
+\newcommand{\jiraStatus}[2]{
+  \tcbox[on line, boxrule=0.5pt, arc=4pt, boxsep=0pt, left=5pt, right=5pt,top=2pt, bottom=2pt, nobeforeafter, colframe=jira-#2!10, colback=jira-#2]{\footnotesize \color{white} #1}
+}
+
+\newcommand{\jiraIssue}[1][]{%
+  \pgfkeys{/jIssue/.cd,
+    iKey/.initial=\empty,
+    iKey/.store in=\issueKey,
+    title/.initial=\empty,
+    title/.store in=\issueTitle,
+    timeSpent/.initial=\empty,
+    timeSpent/.store in=\issueTimeSpent,
+    priority/.initial=\empty,
+    priority/.store in=\issuePriority,
+    type/.initial=\empty,
+    type/.store in=\issueType,
+    resolution/.initial=\empty,
+    resolution/.store in=\issueResolution,
+    status/.initial=\empty,
+    status/.store in=\issueStatus,
+    statusColor/.initial=\empty,
+    statusColor/.store in=\issueStatusColor,
+    labels/.initial=\empty,
+    labels/.store in=\issueLabels,
+    subtasks/.store in=\issueSubTasks,
+    subtasks/.default=\empty, subtasks={},
+    description/.initial=\empty,
+    description/.store in=\issueDescription
+  }
+  %\pgfkeys{/#1}
+
+  \pgfkeys{/jIssue/.cd,#1}
+
+  \begin{parcolumns}[colwidths={1=0.12\columnwidth, 2=0.88\textwidth}]{2}
+    \colchunk[1]{
+      \textbf{\issueKey}
+    }
+
+    \colchunk[2]{
+        \jiraIssueType{\issueType}{1em} \issueTitle \jiraPriority{\issuePriority}{1em} \jiraStatus{\issueStatus}{\issueStatusColor}
+        \ifthenelse{\equal{\issueResolution}{Done}}{}{\issueResolution} \
+        \def\tempF{\issueTimeSpent}\ifx\tempF\empty \else \textit{\issueTimeSpent} \fi
+        \ifthenelse{\equal{\issueDescription}{}}{}{
+          \\ \vspace{1em} \\
+            \textit{\issueDescription}
+        }
+    }
+  \end{parcolumns}
+  \ifthenelse{\equal{\issueSubTasks}{}}{ % Empty
+        \vspace{1em}
+      }{
+        \hfill
+        \begin{minipage}[c]{0.87\columnwidth}
+          \vspace{1em}
+          \textbf{Subtasks:}\\
+            \issueSubTasks
+        \end{minipage}
+        \vspace{1em}      
+      }
+  
+}
+
+%%% /Jira Issue
